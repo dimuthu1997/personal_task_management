@@ -66,7 +66,7 @@ class _InitialScreenState extends State<InitialScreen> {
                     context,
                     MaterialPageRoute(
                       builder:
-                          (context) => const SignUpScreen(
+                          (context) => const SignInScreen(
                             // getEntertainerStore: getEntertainerStore,
                           ),
                     ),
@@ -89,7 +89,7 @@ class _InitialScreenState extends State<InitialScreen> {
                           TextSpan(
                             text: "Sign In",
                             style: TextStyle(
-                              color: Colors.black,
+                              color: Colors.white,
                               fontSize: 14.sp,
 
                               decoration: TextDecoration.underline,
