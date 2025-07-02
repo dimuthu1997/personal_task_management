@@ -16,16 +16,9 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
-
-  late TextEditingController _emailController;
-  late TextEditingController _passwordController;
-
-  @override
-  void initState() {
-    _emailController = TextEditingController();
-    _passwordController = TextEditingController();
-    super.initState();
-  }
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -92,28 +85,50 @@ class _SignInScreenState extends State<SignInScreen> {
                     vertical: 8,
                   ),
                   child: ElevatedButton(
-                    onPressed: () async {
-                      if (_formKey.currentState?.validate() ?? false) {
-                        final email = _emailController.text.trim();
-                        final password = _passwordController.text.trim();
+                    onPressed:
+                        _isLoading
+                            ? null
+                            : () async {
+                              if (_formKey.currentState?.validate() ?? false) {
+                                final email = _emailController.text.trim();
+                                final password =
+                                    _passwordController.text.trim();
 
-                        try {
-                          await authProvider.login(email, password);
-                          // Navigate to home screen on success
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const HomeScreen(),
-                            ),
-                          );
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Login failed: $e')),
-                          );
-                        }
-                      }
-                    },
-                    child: const Text('Sign In'),
+                                setState(() => _isLoading = true);
+
+                                try {
+                                  await authProvider.login(email, password);
+
+                                  if (mounted) {
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const HomeScreen(),
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Login failed: $e')),
+                                  );
+                                } finally {
+                                  if (mounted) {
+                                    setState(() => _isLoading = false);
+                                  }
+                                }
+                              }
+                            },
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                            : const Text('Sign In'),
                   ),
                 ),
                 const Spacer(),
@@ -138,8 +153,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder:
-                                          (context) => const SignUpScreen(),
+                                      builder: (_) => const SignUpScreen(),
                                     ),
                                   );
                                 },

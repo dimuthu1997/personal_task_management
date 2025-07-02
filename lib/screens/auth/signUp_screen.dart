@@ -18,6 +18,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -102,27 +103,55 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           vertical: 20,
                         ),
                         child: ElevatedButton(
-                          child: const Text('Sign Up'),
-                          onPressed: () async {
-                            if (_formKey.currentState!.validate()) {
-                              final email = _emailController.text.trim();
-                              final password = _passwordController.text.trim();
-                              try {
-                                await authProvider.register(email, password);
+                          onPressed:
+                              _isLoading
+                                  ? null
+                                  : () async {
+                                    if (_formKey.currentState!.validate()) {
+                                      final email =
+                                          _emailController.text.trim();
+                                      final password =
+                                          _passwordController.text.trim();
+                                      setState(() => _isLoading = true);
+                                      try {
+                                        await authProvider.register(
+                                          email,
+                                          password,
+                                        );
 
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const HomeScreen(),
-                                  ),
-                                );
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')),
-                                );
-                              }
-                            }
-                          },
+                                        if (mounted) {
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (_) => const HomeScreen(),
+                                            ),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(content: Text('Error: $e')),
+                                        );
+                                      } finally {
+                                        if (mounted) {
+                                          setState(() => _isLoading = false);
+                                        }
+                                      }
+                                    }
+                                  },
+                          child:
+                              _isLoading
+                                  ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Text('Sign Up'),
                         ),
                       ),
                       const Spacer(),
