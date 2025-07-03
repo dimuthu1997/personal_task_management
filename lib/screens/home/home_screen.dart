@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:personal_task_management/models/task_model.dart';
 import 'package:personal_task_management/providers/task_provider.dart';
+import 'package:personal_task_management/providers/theme_provider.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,14 +17,26 @@ class _HomeScreenState extends State<HomeScreen> {
   String _filter = 'All';
   String _search = '';
 
+  Future<void> _refreshTasks() async {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<TaskProvider>(context, listen: false);
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("My Tasks"),
         actions: [
+          IconButton(
+            icon: Icon(
+              themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+            ),
+            onPressed: themeProvider.toggleTheme,
+            tooltip: 'Toggle Theme',
+          ),
           PopupMenuButton<String>(
             onSelected: (value) => setState(() => _filter = value),
             itemBuilder:
@@ -40,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: TextField(
               decoration: const InputDecoration(
                 hintText: 'Search tasks...',
@@ -52,108 +65,150 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      body: StreamBuilder(
-        stream:
-            FirebaseFirestore.instance
-                .collection('users')
-                .doc(FirebaseAuth.instance.currentUser?.uid)
-                .collection('tasks')
-                .orderBy('dueDate')
-                .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError)
-            return const Center(child: Text("Something went wrong"));
-          if (!snapshot.hasData)
-            return const Center(child: CircularProgressIndicator());
+      body: RefreshIndicator(
+        onRefresh: _refreshTasks,
+        child: StreamBuilder(
+          stream:
+              FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(FirebaseAuth.instance.currentUser?.uid)
+                  .collection('tasks')
+                  .orderBy('dueDate')
+                  .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Center(child: Text("Something went wrong"));
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          var docs = snapshot.data!.docs;
-          var tasks =
-              docs.map((doc) => TaskModel.fromMap(doc.id, doc.data())).toList();
+            var docs = snapshot.data!.docs;
+            var tasks =
+                docs
+                    .map((doc) => TaskModel.fromMap(doc.id, doc.data()))
+                    .toList();
 
-          tasks =
-              tasks.where((task) {
-                final matchFilter =
-                    _filter == 'All' ||
-                    (_filter == 'Pending' && !task.isCompleted) ||
-                    (_filter == 'Completed' && task.isCompleted);
-                final matchSearch =
-                    task.title.toLowerCase().contains(_search.toLowerCase()) ||
-                    task.description.toLowerCase().contains(
-                      _search.toLowerCase(),
-                    );
-                return matchFilter && matchSearch;
-              }).toList();
+            tasks =
+                tasks.where((task) {
+                  final matchFilter =
+                      _filter == 'All' ||
+                      (_filter == 'Pending' && !task.isCompleted) ||
+                      (_filter == 'Completed' && task.isCompleted);
+                  final matchSearch =
+                      task.title.toLowerCase().contains(
+                        _search.toLowerCase(),
+                      ) ||
+                      task.description.toLowerCase().contains(
+                        _search.toLowerCase(),
+                      );
+                  return matchFilter && matchSearch;
+                }).toList();
 
-          if (tasks.isEmpty)
-            return const Center(child: Text("No tasks available"));
+            if (tasks.isEmpty) {
+              return const Center(child: Text("No tasks available"));
+            }
 
-          return ListView.builder(
-            itemCount: tasks.length,
-            itemBuilder: (context, index) {
-              final task = tasks[index];
+            return ListView.builder(
+              itemCount: tasks.length,
+              itemBuilder: (context, index) {
+                final task = tasks[index];
 
-              return Card(
-                elevation: 3,
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: ListTile(
-                  title: Text(
-                    task.title,
-                    style: TextStyle(
-                      decoration:
-                          task.isCompleted ? TextDecoration.lineThrough : null,
-                      color: task.priorityColor,
+                return Dismissible(
+                  key: Key(task.id),
+                  background: Container(
+                    color: Colors.green,
+                    padding: const EdgeInsets.only(left: 20),
+                    alignment: Alignment.centerLeft,
+                    child: const Icon(Icons.check, color: Colors.white),
+                  ),
+                  secondaryBackground: Container(
+                    color: Colors.red,
+                    padding: const EdgeInsets.only(right: 20),
+                    alignment: Alignment.centerRight,
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+                  confirmDismiss: (direction) async {
+                    if (direction == DismissDirection.startToEnd) {
+                      // Swipe right -> mark as complete/incomplete
+                      final updatedTask = task.copyWith(
+                        isCompleted: !task.isCompleted,
+                      );
+                      provider.updateTask(updatedTask);
+                      return false; // Prevent Dismiss animation
+                    } else if (direction == DismissDirection.endToStart) {
+                      // Swipe left -> delete
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder:
+                            (_) => AlertDialog(
+                              title: const Text("Delete Task"),
+                              content: Text(
+                                "Are you sure you want to delete '${task.title}'?",
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed:
+                                      () => Navigator.pop(context, false),
+                                  child: const Text("Cancel"),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text(
+                                    "Delete",
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                      );
+                      if (confirmed == true) {
+                        provider.deleteTask(task.id);
+                        return true; // Proceed with Dismiss animation
+                      }
+                    }
+                    return false;
+                  },
+                  child: Card(
+                    elevation: 3,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    child: ListTile(
+                      title: Text(
+                        task.title,
+                        style: TextStyle(
+                          decoration:
+                              task.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                          color: task.priorityColor,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${task.description}\nDue: ${task.dueDate.toLocal().toString().split(" ")[0]}',
+                      ),
+                      trailing: Checkbox(
+                        value: task.isCompleted,
+                        onChanged: (value) {
+                          final updatedTask = task.copyWith(isCompleted: value);
+                          provider.updateTask(updatedTask);
+                        },
+                      ),
+                      onTap: () => _showEditTaskDialog(context, task),
                     ),
                   ),
-                  subtitle: Text(
-                    '${task.description}\nDue: ${task.dueDate.toLocal().toString().split(" ")[0]}',
-                  ),
-                  trailing: Checkbox(
-                    value: task.isCompleted,
-                    onChanged: (value) {
-                      final updatedTask = task.copyWith(isCompleted: value);
-                      provider.updateTask(updatedTask);
-                    },
-                  ),
-                  onTap: () => _showEditTaskDialog(context, task),
-                  onLongPress: () => _confirmDelete(context, task),
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            );
+          },
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.add),
         onPressed: () => _showAddTaskDialog(context),
       ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context, TaskModel task) {
-    final provider = Provider.of<TaskProvider>(context, listen: false);
-    showDialog(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text("Delete Task"),
-            content: Text("Are you sure to delete '${task.title}'?"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
-              ),
-              TextButton(
-                onPressed: () {
-                  provider.deleteTask(task.id);
-                  Navigator.pop(context);
-                },
-                child: const Text(
-                  "Delete",
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-            ],
-          ),
     );
   }
 
@@ -186,7 +241,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         TextField(
                           controller: titleController,
-                          decoration: const InputDecoration(labelText: "Title"),
+                          decoration: const InputDecoration(
+                            labelText: "Title",
+                            errorText: null,
+                          ),
                         ),
                         TextField(
                           controller: descController,
@@ -213,7 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               dueDate == null
                                   ? 'No date'
-                                  : 'Due: ${dueDate!.toLocal().toString().split(" ")[0]}',
+                                  : 'Due: ${dueDate?.toLocal().toString().split(" ")[0]}',
                             ),
                             IconButton(
                               icon: const Icon(Icons.calendar_today),
@@ -224,8 +282,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   firstDate: DateTime.now(),
                                   lastDate: DateTime(2100),
                                 );
-                                if (picked != null)
+                                if (picked != null) {
                                   setState(() => dueDate = picked);
+                                }
                               },
                             ),
                           ],
@@ -241,8 +300,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ElevatedButton(
                       onPressed: () {
                         if (titleController.text.trim().isEmpty ||
-                            dueDate == null)
+                            dueDate == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "Please enter a title and pick a due date.",
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
                           return;
+                        }
 
                         final task = TaskModel(
                           id: editingTask?.id ?? '',

@@ -11,10 +11,11 @@ class TaskManagementApp extends StatelessWidget {
     final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp(
+      title: 'Task Manager',
       debugShowCheckedModeBanner: false,
-      title: 'Task Management',
-      themeMode: ThemeMode.light,
-      theme: themeProvider.theme,
+      themeMode: themeProvider.themeMode,
+      theme: themeProvider.lightTheme,
+      darkTheme: themeProvider.darkTheme,
       home: const SplashScreen(),
     );
   }
