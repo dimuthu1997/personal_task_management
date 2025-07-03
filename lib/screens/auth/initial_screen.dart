@@ -65,10 +65,7 @@ class _InitialScreenState extends State<InitialScreen> {
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder:
-                          (context) => const SignInScreen(
-                            // getEntertainerStore: getEntertainerStore,
-                          ),
+                      builder: (context) => const SignInScreen(),
                     ),
                   );
                 },
@@ -102,9 +99,7 @@ class _InitialScreenState extends State<InitialScreen> {
                                       context,
                                       MaterialPageRoute(
                                         builder:
-                                            (context) => const SignInScreen(
-                                              // getEntertainerStore: getEntertainerStore,
-                                            ),
+                                            (context) => const SignInScreen(),
                                       ),
                                     );
                                   },

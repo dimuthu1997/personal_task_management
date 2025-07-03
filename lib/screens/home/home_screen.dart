@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:personal_task_management/models/task_model.dart';
+import 'package:personal_task_management/providers/auth_provider.dart';
 import 'package:personal_task_management/providers/task_provider.dart';
 import 'package:personal_task_management/providers/theme_provider.dart';
+import 'package:personal_task_management/screens/auth/initial_screen.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -25,9 +26,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final provider = Provider.of<TaskProvider>(context, listen: false);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text("My Tasks"),
         actions: [
           IconButton(
@@ -37,19 +40,75 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: themeProvider.toggleTheme,
             tooltip: 'Toggle Theme',
           ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              final shouldLogout = await showDialog<bool>(
+                context: context,
+                builder:
+                    (_) => AlertDialog(
+                      title: const Text('Confirm Logout'),
+                      content: const Text('Are you sure you want to log out?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text(
+                            'Logout',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+              );
+
+              if (shouldLogout == true) {
+                await authProvider.logout();
+                if (context.mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const InitialScreen()),
+                  );
+                }
+              }
+            },
+          ),
           PopupMenuButton<String>(
             onSelected: (value) => setState(() => _filter = value),
             itemBuilder:
-                (context) => [
-                  const PopupMenuItem(value: 'All', child: Text("All")),
-                  const PopupMenuItem(value: 'Pending', child: Text("Pending")),
-                  const PopupMenuItem(
-                    value: 'Completed',
-                    child: Text("Completed"),
-                  ),
+                (context) => const [
+                  PopupMenuItem(value: 'All', child: Text("All")),
+                  PopupMenuItem(value: 'Pending', child: Text("Pending")),
+                  PopupMenuItem(value: 'Completed', child: Text("Completed")),
                 ],
           ),
         ],
+
+        // actions: [
+        //   IconButton(
+        //     icon: Icon(
+        //       themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+        //     ),
+        //     onPressed: themeProvider.toggleTheme,
+        //     tooltip: 'Toggle Theme',
+        //   ),
+        //   PopupMenuButton<String>(
+        //     onSelected: (value) => setState(() => _filter = value),
+        //     itemBuilder:
+        //         (context) => [
+        //           const PopupMenuItem(value: 'All', child: Text("All")),
+        //           const PopupMenuItem(value: 'Pending', child: Text("Pending")),
+        //           const PopupMenuItem(
+        //             value: 'Completed',
+        //             child: Text("Completed"),
+        //           ),
+        //         ],
+        //   ),
+        // ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(50),
           child: Padding(
@@ -71,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
           stream:
               FirebaseFirestore.instance
                   .collection('users')
-                  .doc(FirebaseAuth.instance.currentUser?.uid)
+                  .doc(authProvider.user?.uid)
                   .collection('tasks')
                   .orderBy('dueDate')
                   .snapshots(),
